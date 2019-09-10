@@ -8,7 +8,12 @@ const logger = require('morgan');
 const sassMiddleware = require('node-sass-middleware');
 const serveFavicon = require('serve-favicon');
 
+const expressSession = require("express-session");
+const MongoStore = require("connect-mongo")(expressSession);
+const mongoose = require('mongoose');
+
 const indexRouter = require('./routes/index');
+const authenticationRouter = require('./routes/authentication');
 
 const app = express();
 
@@ -16,10 +21,6 @@ const app = express();
 app.set('views', join(__dirname, 'views'));
 app.set('view engine', 'hbs');
 
-app.use(logger('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-app.use(cookieParser());
 app.use(serveFavicon(join(__dirname, 'public/images', 'favicon.ico')));
 app.use(express.static(join(__dirname, 'public')));
 app.use(sassMiddleware({
@@ -29,7 +30,33 @@ app.use(sassMiddleware({
   sourceMap: true
 }));
 
+app.use(logger('dev'));
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
+app.use(expressSession({
+  secret: process.env.SESSION_SECRET,
+  cookie: { maxAge: 60 * 60 * 24 * 1000},
+  resave: true,
+  saveUninitialized: false,
+  store: new MongoStore({
+    mongooseConnection: mongoose.connection,
+    ttl: 24 * 60 * 60
+  })
+
+}));
+
+app.use((req, res, next) => {
+  //console.log('USER SESSION: ', req.session);
+  res.locals.user = req.session.user;
+  next();
+});
+
+
 app.use('/', indexRouter);
+app.use('/authentication', authenticationRouter);
+
+
 
 // Catch missing routes and forward to error handler
 app.use((req, res, next) => {
